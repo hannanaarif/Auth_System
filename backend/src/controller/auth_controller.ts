@@ -1,14 +1,20 @@
 import { NextFunction } from "express";
-import { clearAuthCookies, getAccessTokenCookieOptions, getRefreshTokenCookieOptions, setAuthCookies } from "../utils/cookies";
+import {
+  clearAuthCookies,
+  getAccessTokenCookieOptions,
+  getRefreshTokenCookieOptions,
+  setAuthCookies,
+} from "../utils/cookies";
 import { Request, Response } from "express";
-import { CREATED ,OK} from "../constants/http";
+import { CREATED, OK } from "../constants/http";
 import {
   createAccount,
   loginAccount,
   logoutAccount,
   refreshUserAccessToken,
+  verifyEmail,
 } from "../service/auth_service";
-import { loginSchema, registerSchema } from "./auth_schema";
+import { loginSchema, registerSchema, verificationSchema } from "./auth_schema";
 import { signToken, verifytoken } from "../utils/jwt";
 import SessionModel from "../models/session_model";
 
@@ -106,16 +112,39 @@ export const refreshController = async (
       return res.status(401).json({ message: "No refresh token provided" });
     }
 
-    const { accessToken, newRefreshToken } = await refreshUserAccessToken(refreshToken);
+    const { accessToken, newRefreshToken } =
+      await refreshUserAccessToken(refreshToken);
 
-     if (newRefreshToken) {
-    res.cookie("refreshToken", newRefreshToken, getRefreshTokenCookieOptions());
+    if (newRefreshToken) {
+      res.cookie(
+        "refreshToken",
+        newRefreshToken,
+        getRefreshTokenCookieOptions()
+      );
+    }
+    return res
+      .status(OK)
+      .cookie("accessToken", accessToken, getAccessTokenCookieOptions())
+      .json({ message: "Access token refreshed" });
+  } catch (error) {
+    next(error);
   }
-  return res
-    .status(OK)
-    .cookie("accessToken", accessToken, getAccessTokenCookieOptions())
-    .json({ message: "Access token refreshed" })
-    
+};
+
+export const verifyController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const verificationCode = verificationSchema.parse(req.params.code);
+
+    const result = await verifyEmail(verificationCode);
+
+    return res.status(OK).json({
+      result,
+      message: "User verified successfully",
+    });
   } catch (error) {
     next(error);
   }

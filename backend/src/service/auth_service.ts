@@ -16,6 +16,8 @@ import {
   signToken,
   verifytoken,
 } from "../utils/jwt";
+import { NOT_FOUND } from "../constants/http";
+import NotFoundError from "../errors/NotFoundError";
 
 type createUser = {
   email: string;
@@ -195,6 +197,35 @@ export const refreshUserAccessToken = async (refreshToken: string) => {
   } catch (error) {
 
     throw new InternalServerError("Error while refreshing access token");
-    
+
   }
 };
+
+export const verifyEmail=async(verificationCode:string)=>{
+    const verifyDocument=await VerificationCodeModel.findById({_id:verificationCode,type:VerificationCodeType.EmailVarification, expireAt:{$gt:new Date()}});
+
+
+    if(!verifyDocument){
+        throw new NotFoundError("user not found for verification")
+    }
+
+    const updatedUser=await UserModel.findByIdAndUpdate(verifyDocument.userId,{varified:true},{new:true})
+
+    if (!updatedUser) {
+        throw new NotFoundError("User not found");
+    }
+
+    await verifyDocument.deleteOne();
+
+    return {
+        user: {
+            _id: updatedUser._id,
+            email: updatedUser.email,
+            verified: updatedUser.varified,
+            createdAt: updatedUser.createdAt,
+            updatedAt: updatedUser.updatedAt,
+        },
+    }
+
+}
+    

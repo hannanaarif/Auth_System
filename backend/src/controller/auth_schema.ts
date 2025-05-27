@@ -16,3 +16,5 @@ export const registerSchema = loginSchema.extend({
     message: "Passwords don't match",
   });
 
+  export const verificationSchema=z.string().min(1).max(24)
+
