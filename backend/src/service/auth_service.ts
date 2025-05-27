@@ -7,6 +7,7 @@ import UserModel from "../models/user_model";
 import VerificationCodeModel from "../models/varificationCode_model";
 import { oneYearFromNow } from "../utils/date";
 import jwt from "jsonwebtoken";
+import { refreshTokenSignOptions, signToken } from "../utils/jwt";
 
 type createUser = {
   email: string;
@@ -44,20 +45,23 @@ export const createAccount = async (data: createUser) => {
 
     //sign acces or refresh token logic can be added here
 
-    const refreshToken = jwt.sign(
-      { sessionId: session._id },
-      JWT_REFRESH_SECRET,
-      {
-        audience: ["user"],
-        expiresIn: "30d",
-      }
-    );
+    const refreshToken = signToken({ sessionId: session._id },refreshTokenSignOptions);
+    const accessToken = signToken({ userId: user._id, sessionId: session._id});
 
-    const accessToken = jwt.sign(
-      { userId: user._id, sessionId: session._id },
-      JWT_SECRET,
-      { audience: ["user"], expiresIn: "15m" }
-    );
+    // const refreshToken = jwt.sign(
+    //   { sessionId: session._id },
+    //   JWT_REFRESH_SECRET,
+    //   {
+    //     audience: ["user"],
+    //     expiresIn: "30d",
+    //   }
+    // );
+
+    // const accessToken = jwt.sign(
+    //   { userId: user._id, sessionId: session._id },
+    //   JWT_SECRET,
+    //   { audience: ["user"], expiresIn: "15m" }
+    // );
 
     return {
       user: {
@@ -104,22 +108,8 @@ export const loginAccount = async (data:loginUser) => {
             userId: user._id,
             userAgent: data.userAgent,
         });
-
-        const refreshToken = jwt.sign(
-            { sessionId: session._id },
-            JWT_REFRESH_SECRET,
-            {
-                audience: ["user"],
-                expiresIn: "30d",
-            }
-        );
-
-        const accessToken = jwt.sign(
-            { userId: user._id, sessionId: session._id },
-            JWT_SECRET,
-            { audience: ["user"], expiresIn: "15m" }
-        );
-
+        const refreshToken = signToken({ sessionId: session._id },refreshTokenSignOptions);
+        const accessToken = signToken({ userId: user._id, sessionId: session._id});
         return {
             user: {
                 _id: user._id,
@@ -146,7 +136,7 @@ export const logoutAccount = async (sessionId: string) => {
     if (!session) {
       throw new BadRequest("Session not found");
     }
-    
+
     return { message: "Logged out successfully" };
   } catch (error) {
     throw new InternalServerError("Error while logging out");

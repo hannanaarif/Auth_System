@@ -2,7 +2,7 @@ import { hash } from "bcrypt";
 import mongoose from "mongoose";
 import {compareValue, hashValue} from "../utils/bcrypt";
 
-export interface UserSchema extends mongoose.Document {
+export interface UserDocument extends mongoose.Document {
     email: string;
     password: string;
     varified: boolean;
@@ -11,7 +11,7 @@ export interface UserSchema extends mongoose.Document {
     comparePassword: (password: string) => Promise<boolean>;
 }
 
-const UserSchema =new mongoose.Schema<UserSchema>({
+const UserSchema =new mongoose.Schema<UserDocument>({
     email: {
         type: String,
         required: true,
@@ -44,6 +44,6 @@ UserSchema.methods.comparePassword = async function (password: string) {
     return isMatch;
 }   
 
-const UserModel = mongoose.model<UserSchema>("User", UserSchema);
+const UserModel = mongoose.model<UserDocument>("User", UserSchema);
 
 export default UserModel;

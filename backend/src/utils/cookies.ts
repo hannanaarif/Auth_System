@@ -1,12 +1,12 @@
 import { CookieOptions, Request, Response } from "express";
 import { fifteenMinutesfromNow, thirthydayfromNow } from "./date";
 
-const isProduction = process.env.NODE_ENV === "production";
+const secure = process.env.NODE_ENV !== "development";
 
 const defaults: CookieOptions = {
   httpOnly: true,
-  secure: isProduction,
-  sameSite: isProduction ? "strict" : "lax",
+  secure,
+  sameSite: "strict",
   domain: 'localhost',
   path: '/'
 };
@@ -19,10 +19,7 @@ const getAccessTokenCookieOptions = () => ({
 const getRefreshTokenCookieOptions = () => ({
   ...defaults,
   expires: thirthydayfromNow(),
-  path: '/auth',
-  sameSite: 'lax' as const,
-  secure: false, // For local development
-  httpOnly: true
+  path: '/auth/refresh',
 });
 
 type params = {
@@ -40,3 +37,11 @@ export const setAuthCookies = ({
     .cookie("accessToken", accessToken, getAccessTokenCookieOptions())
     .cookie("refreshToken", refreshToken, getRefreshTokenCookieOptions())
 };
+
+export const clearAuthCookies = (res: Response) => {
+  return res.clearCookie("accessToken").clearCookie("refreshToken",{
+    path: '/auth/refresh',
+  });
+};
+
+
