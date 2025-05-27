@@ -1,13 +1,21 @@
-import { JWT_REFRESH_SECRET, JWT_SECRET } from "../constants/env";
+import { now } from "mongoose";
 import VerificationCodeType from "../constants/varificationcodeType";
 import BadRequest from "../errors/BadRequest";
 import InternalServerError from "../errors/InternalServerError";
 import SessionModel from "../models/session_model";
 import UserModel from "../models/user_model";
 import VerificationCodeModel from "../models/varificationCode_model";
-import { oneYearFromNow } from "../utils/date";
-import jwt from "jsonwebtoken";
-import { refreshTokenSignOptions, signToken } from "../utils/jwt";
+import {
+  oneDayInMilliseconds,
+  oneYearFromNow,
+  thirthydayfromNow,
+} from "../utils/date";
+import {
+  RefreshTokenPayload,
+  refreshTokenSignOptions,
+  signToken,
+  verifytoken,
+} from "../utils/jwt";
 
 type createUser = {
   email: string;
@@ -45,8 +53,11 @@ export const createAccount = async (data: createUser) => {
 
     //sign acces or refresh token logic can be added here
 
-    const refreshToken = signToken({ sessionId: session._id },refreshTokenSignOptions);
-    const accessToken = signToken({ userId: user._id, sessionId: session._id});
+    const refreshToken = signToken(
+      { sessionId: session._id },
+      refreshTokenSignOptions
+    );
+    const accessToken = signToken({ userId: user._id, sessionId: session._id });
 
     // const refreshToken = jwt.sign(
     //   { sessionId: session._id },
@@ -84,51 +95,50 @@ export const createAccount = async (data: createUser) => {
   }
 };
 
-
 type loginUser = {
   email: string;
   password: string;
   userAgent?: string;
 };
 
+export const loginAccount = async (data: loginUser) => {
+  try {
+    const user = await UserModel.findOne({ email: data.email });
+    if (!user) {
+      throw new BadRequest("Invalid email or password");
+    }
 
-export const loginAccount = async (data:loginUser) => {
-    try {
-        const user =await UserModel.findOne({ email: data.email });
-        if (!user) {
-            throw new BadRequest("Invalid email or password");
-        }
+    const isPasswordValid = await user.comparePassword(data.password);
+    if (!isPasswordValid) {
+      throw new BadRequest("Invalid email or password");
+    }
 
-        const isPasswordValid = await user.comparePassword(data.password);
-        if (!isPasswordValid) {
-            throw new BadRequest("Invalid email or password");
-        }
-
-        const session = await SessionModel.create({
-            userId: user._id,
-            userAgent: data.userAgent,
-        });
-        const refreshToken = signToken({ sessionId: session._id },refreshTokenSignOptions);
-        const accessToken = signToken({ userId: user._id, sessionId: session._id});
-        return {
-            user: {
-                _id: user._id,
-                email: user.email,
-                createdAt: user.createdAt,
-                updatedAt: user.updatedAt,
-            },
-            accessToken,
-            refreshToken,
-        };
-
-    }catch (error) {
-        if (error instanceof BadRequest) {
-            throw error;
-        }
-        throw new InternalServerError("Error while logging in");
-    }   
-}
-
+    const session = await SessionModel.create({
+      userId: user._id,
+      userAgent: data.userAgent,
+    });
+    const refreshToken = signToken(
+      { sessionId: session._id },
+      refreshTokenSignOptions
+    );
+    const accessToken = signToken({ userId: user._id, sessionId: session._id });
+    return {
+      user: {
+        _id: user._id,
+        email: user.email,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
+      accessToken,
+      refreshToken,
+    };
+  } catch (error) {
+    if (error instanceof BadRequest) {
+      throw error;
+    }
+    throw new InternalServerError("Error while logging in");
+  }
+};
 
 export const logoutAccount = async (sessionId: string) => {
   try {
@@ -140,5 +150,51 @@ export const logoutAccount = async (sessionId: string) => {
     return { message: "Logged out successfully" };
   } catch (error) {
     throw new InternalServerError("Error while logging out");
+  }
+};
+
+export const refreshUserAccessToken = async (refreshToken: string) => {
+  try {
+    const { payload } = verifytoken<RefreshTokenPayload>(refreshToken, {
+      secret: refreshTokenSignOptions.secret,
+    });
+
+    if (!payload || !payload.sessionId) {
+      throw new BadRequest("Invalid refresh token");
+    }
+
+    const sessionId = payload.sessionId;
+    // Check if the session exists
+    const session = await SessionModel.findById(sessionId);
+    if (!session) {
+      throw new BadRequest("Session expires or does not exist");
+    }
+
+    const now = new Date();
+
+    const sessionNeedsRefresh =
+      session.expiresAt.getTime() - now.getTime() <= oneDayInMilliseconds;
+
+    if (sessionNeedsRefresh) {
+      session.expiresAt = thirthydayfromNow();
+      await session.save();
+    }
+
+    const newRefreshToken = sessionNeedsRefresh
+      ? signToken({ sessionId: session._id }, refreshTokenSignOptions)
+      : undefined;
+
+    const accessToken = signToken({
+      userId: session.userId,
+      sessionId: session._id,
+    });
+    return {
+      accessToken,
+      newRefreshToken,
+    };
+  } catch (error) {
+
+    throw new InternalServerError("Error while refreshing access token");
+    
   }
 };

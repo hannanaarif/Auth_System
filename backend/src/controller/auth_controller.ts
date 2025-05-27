@@ -1,14 +1,15 @@
 import { NextFunction } from "express";
-import { clearAuthCookies, setAuthCookies } from "../utils/cookies";
+import { clearAuthCookies, getAccessTokenCookieOptions, getRefreshTokenCookieOptions, setAuthCookies } from "../utils/cookies";
 import { Request, Response } from "express";
-import { CREATED } from "../constants/http";
+import { CREATED ,OK} from "../constants/http";
 import {
   createAccount,
   loginAccount,
   logoutAccount,
+  refreshUserAccessToken,
 } from "../service/auth_service";
 import { loginSchema, registerSchema } from "./auth_schema";
-import { verifytoken } from "../utils/jwt";
+import { signToken, verifytoken } from "../utils/jwt";
 import SessionModel from "../models/session_model";
 
 export const registerController = async (
@@ -71,7 +72,7 @@ export const logoutController = async (
   req: Request,
   res: Response,
   next: NextFunction
-)=> {
+) => {
   try {
     const accessToken = req.cookies.accessToken;
 
@@ -88,6 +89,33 @@ export const logoutController = async (
     return clearAuthCookies(res)
       .status(200)
       .json({ message: "Logged out successfully" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const refreshController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const refreshToken = req.cookies.refreshToken;
+
+    if (!refreshToken) {
+      return res.status(401).json({ message: "No refresh token provided" });
+    }
+
+    const { accessToken, newRefreshToken } = await refreshUserAccessToken(refreshToken);
+
+     if (newRefreshToken) {
+    res.cookie("refreshToken", newRefreshToken, getRefreshTokenCookieOptions());
+  }
+  return res
+    .status(OK)
+    .cookie("accessToken", accessToken, getAccessTokenCookieOptions())
+    .json({ message: "Access token refreshed" })
+    
   } catch (error) {
     next(error);
   }
